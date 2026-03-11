@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>SmartSpend Dashboard</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+{% extends "base.html" %}
+
+{% block title %}Dashboard | SmartSpend AI{% endblock %}
+
+{% block content %}
+    <style>
+        body {
+            font-family: Arial;
+            background: #f4f6f8;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1,
+        h2 {
+            color: #2c3e50;
+        }
+
+        table {
+            margin: auto;
+            border-collapse: collapse;
+            width: 90%;
+            max-width: 800px;
+            background: white;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+
+        th {
+            background: #2c3e50;
+            color: white;
+        }
+
+        .card {
+            display: inline-block;
+            margin: 10px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            min-width: 180px;
+        }
+
+        .dashboard-cards {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            width: 90%;
+            max-width: 600px;
+            margin: 30px auto;
+        }
+
+        canvas {
+            width: 100% !important;
+            height: auto !important;
+        }
+
+        .table-container{
+            width:800px;
+            margin:0 auto;
+            border:1px solid #ddd;
+            border-radius:8px;
+        }
+
+        table{
+            width:100%;
+            border-collapse:separate;
+            border-spacing:0;
+        }
+
+        thead{
+            display:table;
+            width:100%;
+            table-layout:fixed;
+        }
+
+        tbody{
+            display:block;
+            max-height:350px;
+            overflow-y:auto;
+            width:100%;
+        }
+
+        tbody tr{
+            display:table;
+            width:100%;
+            table-layout:fixed;
+        }
+
+        th, td{
+            padding:10px;
+            border-bottom:1px solid #ddd;
+        }
+
+        thead th{
+            background:#2c3e50;
+            color:white;
+        }
+
+        .download-buttons{
+            margin-bottom:10px;
+        }
+
+        .download-buttons button{
+            width: 160px;
+            padding:8px 15px;
+            margin:5px;
+            border:none;
+            background:#007BFF;
+            color:white;
+            border-radius:5px;
+            cursor:pointer;
+        }
+
+        .download-buttons button:hover{
+            background:#0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Dashboard</h1>
+
+    <!-- Home Button -->
+    <div class="home-container">
+        <a href="/" class="home-btn">Home</a>
+    </div>
+
+    <div class="dashboard-cards">
+
+        <div class="card">
+            <h3>Total Income</h3>
+            <h2>₦ {{ total_income }}</h2>
+        </div>
+
+        <div class="card">
+            <h3>Total Expenses</h3>
+            <h2>₦ {{ total_expenses }}</h2>
+        </div>
+
+        <div class="card">
+            <h3>Savings</h3>
+            <h2>₦ {{ savings }}</h2>
+        </div>
+
+    </div>
+
+    <h2>Transactions</h2>
+
+    <div class="download-buttons">
+        <button onclick="downloadCSV()">Download CSV</button>
+        <button onclick="downloadExcel()">Download Excel</button>
+    </div>
+
+    <div class="table-container">
+    <table id="transactionsTable">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Date</th>
+            <th>Category</th>
+            <th>Income</th>
+            <th>Exp. Amount</th>
+        </tr>
+        </thead>
+
+        <tbody>
+        {% for row in data %}
+        <tr>
+            <td>{{ row[0] }}</td>
+            <td>{{ row[1] }}</td>
+            <td>{{ row[2] }}</td>
+
+            <!-- Show income only if > 0 -->
+            <td>
+                {% if row[3] and row[3] > 0 %}
+                    ₦ {{ "{:,.0f}".format(row[3]) }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+
+            <!-- Show expense only if > 0 -->
+            <td>
+                {% if row[4] and row[4] > 0 %}
+                    ₦ {{ "{:,.0f}".format(row[4]) }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    
+    <h2>Expense Distribution</h2>
+    <div class="chart-container">
+        <canvas id="pieChart"></canvas>
+    </div>
+
+    <h2>Category Spending</h2>
+    <div class="chart-container">
+        <canvas id="barChart"></canvas>
+    </div>
+
+    <h2>Savings Trend Analysis</h2>
+    <div class="chart-container">
+        <canvas id="savingsChart"></canvas>
+    </div>
+
+    <h2>Monthly Spending Trend</h2>
+    <div class="chart-container">
+        <canvas id="trendChart"></canvas>
+    </div>
+
+    <script>
+        // category_totals is already formatted as strings with commas, convert to numbers for Chart.js
+        let categoryData = JSON.parse('{{ category_totals | tojson | safe }}');
+        let labels = Object.keys(categoryData);
+        let values = Object.values(categoryData);
+
+        let colors = [
+            "#FF6384",
+            "#36A2EB",
+            "#FFCE56",
+            "#4BC0C0",
+            "#9966FF",
+            "#FF9F40",
+            "#8BC34A",
+            "#E91E63"
+        ];
+
+        new Chart(document.getElementById("pieChart"), {
+            type: "pie",
+            data: {
+                labels: labels,
+                datasets: [{ data: values, backgroundColor: colors }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        new Chart(document.getElementById("barChart"), {
+            type: "bar",
+            data: {
+                labels: labels,
+                datasets: [{ label: "Expenses", data: values, backgroundColor: colors }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // Savings Trend Chart
+        let income = Number("{{ total_income | replace(',', '') }}");
+        let expenses = Number("{{ total_expenses | replace(',', '') }}");
+        let savings = Number("{{ savings | replace(',', '') }}");
+
+        new Chart(document.getElementById("savingsChart"), {
+            type: "line",
+            data: {
+                labels: ["Income", "Expenses", "Savings"],
+                datasets: [{
+                    label: "Financial Trend",
+                    data: [income, expenses, savings],
+                    borderColor: "#007BFF",
+                    backgroundColor: "rgba(0,123,255,0.1)",
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        // Monthly Spending Trend Chart (reads data directly from table)
+
+        let tableRows = document.querySelectorAll("table tr");
+
+        let trendDates = [];
+        let trendExpenses = [];
+
+        tableRows.forEach((row, index) => {
+
+            if(index === 0) return; // skip header
+
+            let cells = row.querySelectorAll("td");
+
+            let date = cells[1].innerText;
+            let expenseText = cells[4].innerText.replace("₦","").replace(/,/g,"").trim();
+
+            let expenseValue = parseFloat(expenseText);
+
+            if(!isNaN(expenseValue)){
+                trendDates.push(date);
+                trendExpenses.push(expenseValue);
+            }
+
+        });
+
+        new Chart(document.getElementById("trendChart"), {
+            type: "line",
+            data: {
+                labels: trendDates,
+                datasets: [{
+                    label: "Daily Spending",
+                    data: trendExpenses,
+                    borderColor: "#28a745",
+                    backgroundColor: "rgba(40,167,69,0.1)",
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        function downloadCSV(){
+
+            let table = document.getElementById("transactionsTable");
+            let rows = table.querySelectorAll("tr");
+
+            let csv = [];
+
+            rows.forEach(row => {
+
+                let cols = row.querySelectorAll("td, th");
+                let rowData = [];
+
+                cols.forEach(col => {
+                    rowData.push(col.innerText.replace(/,/g,""));
+                });
+
+                csv.push(rowData.join(","));
+            });
+
+            let csvFile = new Blob([csv.join("\n")], {type:"text/csv"});
+
+            let downloadLink = document.createElement("a");
+            downloadLink.download = "smartspend_transactions.csv";
+            downloadLink.href = window.URL.createObjectURL(csvFile);
+
+            downloadLink.click();
+        }
+
+
+        function downloadExcel(){
+
+            let table = document.getElementById("transactionsTable").outerHTML;
+
+            let dataType = 'application/vnd.ms-excel';
+
+            let file = new Blob([table], {type:dataType});
+
+            let downloadLink = document.createElement("a");
+
+            downloadLink.href = URL.createObjectURL(file);
+
+            downloadLink.download = "smartspend_transactions.xls";
+
+            downloadLink.click();
+        }
+
+
+    </script>
+
+{% endblock %}
+
+</body>
+
+</html>
