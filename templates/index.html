@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<title>SmartSpend AI</title>
+<link rel="stylesheet" href="/static/style.css">
+
+{% extends "base.html" %}
+
+{% block title %}SmartSpend AI{% endblock %}
+
+{% block content %}
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    background:#f4f6f8;
+    margin:0;
+    padding:20px;
+    text-align:center;
+}
+
+h1{color:#2c3e50;}
+
+.dashboard-container{margin:20px 0;}
+
+.dashboard-btn{
+    background:#007BFF;
+    color:white;
+    padding:10px 20px;
+    text-decoration:none;
+    border-radius:8px;
+    font-weight:bold;
+}
+
+.dashboard-btn:hover{background:#0056b3;}
+
+.form-container{
+    background:white;
+    border-radius:15px;
+    box-shadow:0 10px 25px rgba(0,0,0,0.1);
+    padding:25px 30px;
+    max-width:800px;
+    margin:auto;
+    text-align:left;
+}
+
+label{
+    font-weight:bold;
+    display:block;
+    margin-top:15px;
+    margin-bottom:5px;
+}
+
+input,select{
+    width:100%;
+    padding:8px;
+    border-radius:5px;
+    border:1px solid #ccc;
+    box-sizing:border-box;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:10px;
+}
+
+th,td{
+    border:1px solid #ddd;
+    padding:8px;
+    text-align:center;
+}
+
+th{background:#f2f2f2;}
+
+.add-btn{
+    margin-top:10px;
+    background:#28a745;
+    color:white;
+    border:none;
+    padding:10px 15px;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+.remove-btn{
+    background:#dc3545;
+    color:white;
+    border:none;
+    padding:6px 10px;
+    border-radius:5px;
+    cursor:pointer;
+}
+
+.submit-btn{
+    margin-top:15px;
+    background:#007BFF;
+    color:white;
+    border:none;
+    padding:12px 20px;
+    border-radius:8px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+.submit-btn:hover{background:#0056b3;}
+</style>
+<p><b>AI Powered Personal Expense Advisor</b></p>
+
+{% if user_name %}
+<div class="dashboard-container">
+    <a href="/dashboard" class="dashboard-btn">View Dashboard</a>
+</div>
+{% endif %}
+
+<div class="form-container">
+<form id="expenseForm" action="/predict" method="post">
+
+<h2>Log Entry</h2>
+
+<label>Date</label>
+<input type="date" name="entry_date">
+
+<label>Monthly Income (₦)</label>
+<input type="number" name="monthly_income" placeholder="100000">
+
+<label>Daily Income (₦)</label>
+<input type="number" name="daily_income" placeholder="3000">
+
+<label>Expenses (₦)</label>
+
+<table id="expenseTable">
+<thead>
+<tr>
+<th>Category</th>
+<th>Amount (₦)</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<select name="category_0">
+<option value="">Select Category</option>
+<option value="food_feeding">Food_Feeding</option>
+<option value="transport_fueling">Transport_Fueling</option>
+<option value="utilities">Utilities</option>
+<option value="entertain_refreshmt">Entertain_Refreshmt</option>
+<option value="gas_gen">Gas_Gen</option>
+<option value="school_training">School_Training</option>
+<option value="rent_accommodation">Rent_Accommodation</option>
+<option value="airtime/data">Airtime/Data</option>
+<option value="medical">Medical</option>
+<option value="gift">Gift</option>
+<option value="travel">Travel</option>
+<option value="clothing">Clothing</option>
+<option value="family_care">Family_Care</option>
+<option value="investment">Investment</option>
+<option value="others">Others</option>
+</select>
+</td>
+<td>
+<input type="number" name="amount_0" placeholder="1500">
+</td>
+<td>
+<button type="button" class="remove-btn" onclick="removeRow(this)">❌</button>
+</td>
+</tr>
+</tbody>
+</table>
+
+<button type="button" class="add-btn" onclick="addExpenseRow()">➕ Add Expense</button>
+<br>
+<button type="submit" class="submit-btn">Log Entry & Get Advice</button>
+
+</form>
+</div>
+
+{% if prediction %}
+<div class="advice-card-container" id="advice-card" style="margin-top:30px; display:flex; flex-direction:column; align-items:center;">
+    <div class="advice-card" style="background:linear-gradient(135deg,0,#2575fc); 
+        color:black; 
+        padding:25px 30px; 
+        border-radius:15px; 
+        box-shadow:0 15px 30px rgba(0,0,0,0.2); 
+        max-width:800px; 
+        width:100%; 
+        text-align:left;">
+
+        <h2 style="margin-top:0; font-size:24px;">💡 AI Financial Advice</h2>
+        <p class="advice-text" style="font-size:18px; line-height:1.5;">
+            {{ prediction | safe }}
+        </p>
+
+        {% if projected_expense is not none and projected_savings is not none %}
+        <div class="forecast-details" style="margin-top:20px;">
+            <h3 style="margin-bottom:10px; font-size:20px; border-bottom:2px solid rgba(255,255,255,0.5); padding-bottom:5px;">Summary</h3>
+            <div class="forecast-cards" style="display:flex; gap:15px; flex-wrap:wrap;">
+                <div class="forecast-card" style="flex:1; min-width:180px; background:rgba(255,255,255,0.15); padding:15px; border-radius:10px; text-align:center; box-shadow:0 5px 15px rgba(0,0,0,0.2);">
+                    <h4>Total Expenses</h4>
+                    <p>₦ {{ total }}</p>
+                </div>
+                <div class="forecast-card" style="flex:1; min-width:180px; background:rgba(255,255,255,0.15); padding:15px; border-radius:10px; text-align:center; box-shadow:0 5px 15px rgba(0,0,0,0.2);">
+                    <h4>Estimated Savings</h4>
+                    <p>₦ {{ savings }}</p>
+                </div>
+            </div>
+
+            <h3 style="margin-top:25px; margin-bottom:10px; font-size:20px; border-bottom:2px solid rgba(255,255,255,0.5); padding-bottom:5px;">Forecast</h3>
+            <div class="forecast-cards" style="display:flex; gap:15px; flex-wrap:wrap;">
+                <div class="forecast-card" style="flex:1; min-width:180px; background:rgba(255,255,255,0.15); padding:15px; border-radius:10px; text-align:center; box-shadow:0 5px 15px rgba(0,0,0,0.2);">
+                    <h4>Projected End-of-Month Expenses</h4>
+                    <p>₦ {{ projected_expense }}</p>
+                </div>
+                <div class="forecast-card" style="flex:1; min-width:180px; background:rgba(255,255,255,0.15); padding:15px; border-radius:10px; text-align:center; box-shadow:0 5px 15px rgba(0,0,0,0.2);">
+                    <h4>Projected End-of-Month Savings</h4>
+                    <p>₦ {{ projected_savings }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+
+document.addEventListener('DOMContentLoaded', () => {
+    const adviceCard = document.getElementById('advice-card');
+    if (adviceCard) {
+        adviceCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+});
+
+let expenseCounter = 1;
+
+function addExpenseRow() {
+
+    const tableBody = document.querySelector('#expenseTable tbody');
+    const newRow = document.createElement('tr');
+
+    const categoryCell = document.createElement('td');
+    const categorySelect = document.createElement('select');
+
+    categorySelect.name = `category_${expenseCounter}`;
+
+    categorySelect.innerHTML = `
+<option value="">Select Category</option>
+<option value="food_feeding">Food_Feeding</option>
+<option value="transport_fueling">Transport_Fueling</option>
+<option value="utilities">Utilities</option>
+<option value="entertain_refreshmt">Entertain_Refreshmt</option>
+<option value="gas_gen">Gas_Gen</option>
+<option value="school_training">School_Training</option>
+<option value="rent_accommodation">Rent_Accommodation</option>
+<option value="airtime_data">Airtime_Data</option>
+<option value="medical">Medical</option>
+<option value="gift">Gift</option>
+<option value="travel">Travel</option>
+<option value="clothing">Clothing</option>
+<option value="family_care">Family_Care</option>
+<option value="investment">Investment</option>
+<option value="others">Others</option>
+`;
+
+    categoryCell.appendChild(categorySelect);
+    newRow.appendChild(categoryCell);
+
+    const amountCell = document.createElement('td');
+    const amountInput = document.createElement('input');
+
+    amountInput.type = 'number';
+    amountInput.name = `amount_${expenseCounter}`;
+    amountInput.placeholder = '1500';
+
+    amountCell.appendChild(amountInput);
+    newRow.appendChild(amountCell);
+
+    const actionCell = document.createElement('td');
+
+    const removeBtn = document.createElement('button');
+
+    removeBtn.type = 'button';
+    removeBtn.className = 'remove-btn';
+    removeBtn.textContent = '❌';
+    removeBtn.onclick = () => removeRow(removeBtn);
+
+    actionCell.appendChild(removeBtn);
+    newRow.appendChild(actionCell);
+
+    tableBody.appendChild(newRow);
+
+    expenseCounter++;
+
+}
+
+function removeRow(button) {
+
+    const row = button.closest('tr');
+
+    if (row) row.remove();
+
+}
+
+</script>
+
+{% endblock %}
+
+</body>
+</html>
